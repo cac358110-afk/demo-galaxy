@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Golden Particle Planet</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #instruction {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="instruction">Di chuyển chuột (hoặc chạm tay) vào hành tinh để tương tác!</div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // 1. KHỞI TẠO CƠ BẢN (Scene, Camera, Renderer)
+        const scene = new THREE.Scene();
+        // Thêm sương mù nhẹ để tạo chiều sâu
+        scene.fog = new THREE.FogExp2(0x000000, 0.001);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 50;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. TẠO HẠT (PARTICLES)
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 15000; // Số lượng hạt (càng nhiều càng đẹp nhưng nặng máy)
+
+        const posArray = new Float32Array(particlesCount * 3); // Vị trí (x, y, z)
+        const originalPosArray = new Float32Array(particlesCount * 3); // Vị trí gốc để hạt quay về
+
+        // Tạo hình cầu và vành đai
+        for(let i = 0; i < particlesCount * 3; i+=3) {
+            // Tạo hình cầu trung tâm
+            const r = 15 * Math.cbrt(Math.random()); // Bán kính
+            const theta = Math.random() * 2 * Math.PI;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            let x = r * Math.sin(phi) * Math.cos(theta);
+            let y = r * Math.sin(phi) * Math.sin(theta);
+            let z = r * Math.cos(phi);
+
+            // Tạo vành đai (Ring) cho giống Sao Thổ (khoảng 30% số hạt)
+            if (Math.random() > 0.7) {
+                const ringR = 20 + Math.random() * 15;
+                const ringTheta = Math.random() * 2 * Math.PI;
+                x = ringR * Math.cos(ringTheta);
+                z = ringR * Math.sin(ringTheta);
+                y = (Math.random() - 0.5) * 1; // Độ dày vành đai mỏng
+            }
+
+            posArray[i] = x;
+            posArray[i+1] = y;
+            posArray[i+2] = z;
+
+            // Lưu vị trí gốc
+            originalPosArray[i] = x;
+            originalPosArray[i+1] = y;
+            originalPosArray[i+2] = z;
+        }
+
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+        // Tạo vật liệu cho hạt (Màu vàng cam phát sáng)
+        const material = new THREE.PointsMaterial({
+            size: 0.15,
+            color: 0xffaa00, // Màu vàng cam
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending // Chế độ hòa trộn để hạt sáng lên khi chồng nhau
+        });
+
+        // Tạo đối tượng Points
+        const particlesMesh = new THREE.Points(particlesGeometry, material);
+        scene.add(particlesMesh);
+
+        // 3. TƯƠNG TÁC CHUỘT (Mouse Interaction)
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetX = 0;
+        let targetY = 0;
+
+        const windowHalfX = window.innerWidth / 2;
+        const windowHalfY = window.innerHeight / 2;
+
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX - windowHalfX);
+            mouseY = (event.clientY - windowHalfY);
+        });
+
+        // Hỗ trợ cảm ứng trên điện thoại
+        document.addEventListener('touchmove', (event) => {
+            if(event.touches.length > 0) {
+                mouseX = (event.touches[0].clientX - windowHalfX);
+                mouseY = (event.touches[0].clientY - windowHalfY);
+            }
+        });
+
+        // 4. ANIMATION LOOP (Vòng lặp chuyển động)
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            // Xoay nhẹ toàn bộ hành tinh
+            particlesMesh.rotation.y = elapsedTime * 0.05;
+            particlesMesh.rotation.z = elapsedTime * 0.02;
+
+            // Xử lý tương tác từng hạt
+            // Để tối ưu, ta truy cập trực tiếp vào mảng vị trí
+            const positions = particlesGeometry.attributes.position.array;
+
+            // Chuyển vị trí chuột từ 2D sang không gian 3D tương đối
+            targetX = mouseX * 0.05; 
+            targetY = -mouseY * 0.05;
+
+            for(let i = 0; i < particlesCount; i++) {
+                const i3 = i * 3;
+                
+                // Lấy vị trí hiện tại của hạt
+                let px = positions[i3];
+                let py = positions[i3+1];
+                let pz = positions[i3+2];
+
+                // Lấy vị trí gốc (đã bị xoay theo Mesh, nhưng ở đây tính toán cục bộ nên ta lấy tương đối)
+                // Để đơn giản, ta so sánh khoảng cách với "Điểm tác động" (con trỏ chuột)
+                
+                // Tính khoảng cách từ hạt đến con trỏ chuột (giả lập chuột là một quả cầu năng lượng ở z=10)
+                const dx = targetX - px;
+                const dy = targetY - py;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // HIỆU ỨNG TƯƠNG TÁC
+                // Nếu chuột lại gần (khoảng cách < 8), hạt sẽ bị đẩy ra
+                if (dist < 8) {
+                    const force = (8 - dist) * 8; // Lực đẩy
+                    const angle = Math.atan2(dy, dx);
+                    
+                    // Đẩy hạt ra xa khỏi tâm chuột
+                    positions[i3] -= Math.cos(angle) * 0.1 * force; 
+                    positions[i3+1] -= Math.sin(angle) * 0.1 * force;
+                    // Đẩy nhẹ ra sau hoặc trước
+                    positions[i3+2] += 0.5; 
+                } else {
+                    // Nếu chuột đi xa, hạt từ từ quay về vị trí gốc (Hồi phục)
+                    // Đây là logic đơn giản: Dịch chuyển dần về originalPos
+                    // Lưu ý: Do Mesh đang quay, việc tính toán về vị trí gốc chính xác cần ma trận phức tạp hơn.
+                    // Ở đây mình dùng mẹo: Cho hạt dao động nhẹ để tạo cảm giác "thở"
+                    
+                    const originX = originalPosArray[i3];
+                    const originY = originalPosArray[i3+1];
+                    const originZ = originalPosArray[i3+2];
+
+                    // Lerp (nội suy) về vị trí cũ
+                    positions[i3] += (originX - positions[i3]) * 0.02;
+                    positions[i3+1] += (originY - positions[i3+1]) * 0.02;
+                    positions[i3+2] += (originZ - positions[i3+2]) * 0.02;
+                }
+            }
+            
+            // Bắt buộc phải có dòng này để báo Three.js cập nhật lại vị trí các hạt
+            particlesGeometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Xử lý khi đổi kích thước màn hình
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
