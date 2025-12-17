@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dual Rings Galaxy - Ultimate</title>
+    <title>Galaxy Hand Tracking - Final</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000000; }
         canvas { display: block; }
@@ -11,111 +11,109 @@
             top: 20px;
             width: 100%;
             text-align: center;
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.5);
             font-family: sans-serif;
             pointer-events: none;
             text-transform: uppercase;
-            letter-spacing: 3px;
+            letter-spacing: 2px;
             font-size: 11px;
+            z-index: 10;
         }
+        /* Ẩn video camera đi, chỉ lấy dữ liệu thôi */
+        .input_video { display: none; }
+        
+        /* Loading text */
+        #loading {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: orange;
+            font-family: sans-serif;
+            font-size: 20px;
+            pointer-events: none;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
-    <div id="instruction">Dual Rings Particle System (80k Particles)</div>
-    
+    <div id="instruction">Đưa tay lên trước Camera để tương tác</div>
+    <div id="loading">Đang khởi động Camera & AI...</div>
+
+    <video class="input_video"></video>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <script>
+        // --- PHẦN 1: THREE.JS (HIỆU ỨNG HẠT) ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x000000, 0.0015); // Sương mù nhẹ hơn chút để nhìn rõ vành ngoài
+        scene.fog = new THREE.FogExp2(0x000000, 0.0015);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 55; // Kéo xa camera ra một chút để thấy hết vành to
+        camera.position.z = 55;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- CẤU HÌNH SỐ LƯỢNG HẠT ---
+        // Tạo con trỏ ảo màu đỏ để biết tay đang ở đâu trên màn hình
+        const cursorGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+        const cursorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+        const cursorMesh = new THREE.Mesh(cursorGeometry, cursorMaterial);
+        scene.add(cursorMesh);
+
+        // --- CẤU HÌNH HẠT (GALAXY VÀNH ĐAI KÉP) ---
         const particlesGeometry = new THREE.BufferGeometry();
-        const particlesCount = 80000; 
+        const particlesCount = 80000; // 80k hạt
 
         const posArray = new Float32Array(particlesCount * 3);
         const originalPosArray = new Float32Array(particlesCount * 3);
         const colorsArray = new Float32Array(particlesCount * 3); 
         const randomArray = new Float32Array(particlesCount); 
 
-        const colorPlanet = new THREE.Color(0xffaa00); // Cam (Hành tinh)
-        const colorRing = new THREE.Color(0xffffff);   // Trắng (Vành đai)
+        const colorPlanet = new THREE.Color(0xffaa00); // Cam
+        const colorRing = new THREE.Color(0xffffff);   // Trắng
 
         for(let i = 0; i < particlesCount; i++) {
             const i3 = i * 3;
-            
-            // Chia tỷ lệ hạt:
-            // 0 - 0.45: Hành tinh (45%)
-            // 0.45 - 0.70: Vành nhỏ (25%)
-            // 0.70 - 1.0: Vành to (30%)
             const type = Math.random(); 
-
             let x, y, z;
             let r, theta, phi;
 
-            if (type < 0.45) {
-                // === 1. HÀNH TINH (PLANET) ===
+            if (type < 0.45) { // Hành tinh
                 r = 15 * Math.cbrt(Math.random()); 
                 theta = Math.random() * 2 * Math.PI;
                 phi = Math.acos(2 * Math.random() - 1);
-
                 x = r * Math.sin(phi) * Math.cos(theta);
                 y = r * Math.sin(phi) * Math.sin(theta);
                 z = r * Math.cos(phi);
-
-                // Màu CAM
                 colorsArray[i3] = colorPlanet.r;
                 colorsArray[i3+1] = colorPlanet.g;
                 colorsArray[i3+2] = colorPlanet.b;
-
-            } else {
-                // === VÀNH ĐAI (RINGS) ===
+            } else { // Vành đai
                 let ringR;
-                
-                if (type < 0.70) {
-                    // === 2. VÀNH ĐAI TRONG (INNER RING) ===
-                    // Bán kính từ 19 đến 27
-                    ringR = 19 + Math.random() * 8;
-                } else {
-                    // === 3. VÀNH ĐAI NGOÀI (OUTER RING) ===
-                    // Bán kính từ 32 đến 48 (Tạo khoảng hở từ 27->32)
-                    ringR = 32 + Math.random() * 16;
-                }
-
+                if (type < 0.70) ringR = 19 + Math.random() * 8; // Vành trong
+                else ringR = 32 + Math.random() * 16; // Vành ngoài
                 const ringTheta = Math.random() * 2 * Math.PI;
                 x = ringR * Math.cos(ringTheta);
                 z = ringR * Math.sin(ringTheta);
-                y = (Math.random() - 0.5) * 0.6; // Độ dày mỏng
-
-                // Nghiêng vành đai (Tilt)
+                y = (Math.random() - 0.5) * 0.6; 
                 const tilt = 0.4; 
                 const yNew = y * Math.cos(tilt) - z * Math.sin(tilt);
                 const zNew = y * Math.sin(tilt) + z * Math.cos(tilt);
-                y = yNew;
-                z = zNew;
-
-                // Màu TRẮNG
+                y = yNew; z = zNew;
                 colorsArray[i3] = colorRing.r;
                 colorsArray[i3+1] = colorRing.g;
                 colorsArray[i3+2] = colorRing.b;
             }
 
-            posArray[i3] = x;
-            posArray[i3+1] = y;
-            posArray[i3+2] = z;
-
-            originalPosArray[i3] = x;
-            originalPosArray[i3+1] = y;
-            originalPosArray[i3+2] = z;
-
+            posArray[i3] = x; posArray[i3+1] = y; posArray[i3+2] = z;
+            originalPosArray[i3] = x; originalPosArray[i3+1] = y; originalPosArray[i3+2] = z;
             randomArray[i] = Math.random();
         }
 
@@ -123,36 +121,80 @@
         particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3));
 
         const material = new THREE.PointsMaterial({
-            size: 0.15,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.9,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
+            size: 0.15, vertexColors: true, transparent: true, opacity: 0.9,
+            blending: THREE.AdditiveBlending, depthWrite: false
         });
 
         const particlesMesh = new THREE.Points(particlesGeometry, material);
         scene.add(particlesMesh);
 
-        // --- TƯƠNG TÁC ---
-        let mouseX = 0;
-        let mouseY = 0;
-        let targetX = 0;
-        let targetY = 0;
-        const windowHalfX = window.innerWidth / 2;
-        const windowHalfY = window.innerHeight / 2;
+        // --- PHẦN 2: MEDIAPIPE (AI CAMERA) ---
+        let targetX = 1000; // Mặc định để xa tít để không ảnh hưởng
+        let targetY = 1000;
+        let isHandDetected = false;
 
-        document.addEventListener('mousemove', (event) => {
-            mouseX = (event.clientX - windowHalfX);
-            mouseY = (event.clientY - windowHalfY);
-        });
-        document.addEventListener('touchmove', (event) => {
-            if(event.touches.length > 0) {
-                mouseX = (event.touches[0].clientX - windowHalfX);
-                mouseY = (event.touches[0].clientY - windowHalfY);
+        const videoElement = document.getElementsByClassName('input_video')[0];
+
+        function onResults(results) {
+            // Tắt chữ Loading khi đã chạy
+            document.getElementById('loading').style.display = 'none';
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                isHandDetected = true;
+                
+                // Lấy bàn tay đầu tiên
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Lấy vị trí đầu ngón tay trỏ (Index Finger Tip - số 8)
+                // MediaPipe trả về toạ độ từ 0 đến 1. Ta cần đổi sang toạ độ không gian 3D.
+                // x: 0 (trái) -> 1 (phải). y: 0 (trên) -> 1 (dưới)
+                
+                const x = landmarks[8].x; 
+                const y = landmarks[8].y;
+
+                // Chuyển đổi sang hệ toạ độ Three.js (Ước lượng)
+                // Do Camera bị ngược gương (Mirror), ta đảo chiều X: (1 - x)
+                targetX = (0.5 - x) * 80; // Nhân 80 để mở rộng phạm vi ra toàn màn hình
+                targetY = (0.5 - y) * 50; // Nhân 50 theo chiều dọc
+
+                // Di chuyển con trỏ đỏ theo tay
+                cursorMesh.position.x = targetX;
+                cursorMesh.position.y = targetY;
+                cursorMesh.visible = true;
+
+            } else {
+                isHandDetected = false;
+                cursorMesh.visible = false;
+                // Nếu không thấy tay, đưa mục tiêu ra xa để hạt hồi phục
+                targetX = 1000; 
+                targetY = 1000;
             }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
         });
 
+        hands.onResults(onResults);
+
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        cameraUtils.start();
+
+
+        // --- PHẦN 3: ANIMATION LOOP ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -163,34 +205,34 @@
 
             const positions = particlesGeometry.attributes.position.array;
             
-            // Chỉnh độ nhạy chuột
-            targetX = mouseX * 0.05; 
-            targetY = -mouseY * 0.05;
-
             for(let i = 0; i < particlesCount; i++) {
                 const i3 = i * 3;
                 let px = positions[i3];
                 let py = positions[i3+1];
                 let pz = positions[i3+2];
 
+                // Tính toán dựa trên targetX/Y từ Camera
+                
+                // Do mesh xoay, ta cần tính toán vị trí chuột tương đối phức tạp hơn.
+                // Ở đây ta dùng cách đơn giản: Xoay ngược vị trí hạt về mặt phẳng 2D để so sánh với tay
+                // Hoặc đơn giản hơn: Coi như tay là một trường lực hình cầu cố định trong không gian
+                
                 const dx = targetX - px;
                 const dy = targetY - py;
                 const dist = Math.sqrt(dx*dx + dy*dy);
 
-                // Tăng bán kính tương tác lên để quét được cả vành ngoài
-                const interactionRadius = 25; 
+                const interactionRadius = 20; // Bán kính tay
 
                 if (dist < interactionRadius) {
                     const force = (interactionRadius - dist) / interactionRadius;
                     const angle = Math.atan2(dy, dx);
                     const noise = randomArray[i]; 
 
-                    // Lực đẩy
-                    const push = 40 * force * (1 + noise);
+                    const push = 35 * force * (1 + noise); // Lực đẩy
 
-                    positions[i3] -= Math.cos(angle) * 0.08 * push;
-                    positions[i3+1] -= Math.sin(angle) * 0.08 * push;
-                    positions[i3+2] += force * 10 * (Math.random() - 0.5); 
+                    positions[i3] -= Math.cos(angle) * 0.1 * push;
+                    positions[i3+1] -= Math.sin(angle) * 0.1 * push;
+                    positions[i3+2] += force * 8 * (Math.random() - 0.5); 
                 } else {
                     const originX = originalPosArray[i3];
                     const originY = originalPosArray[i3+1];
