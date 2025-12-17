@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Golden Planet & White Rings - Ultimate</title>
+    <title>Dual Rings Galaxy - Ultimate</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000000; }
         canvas { display: block; }
@@ -21,48 +21,49 @@
     </style>
 </head>
 <body>
-    <div id="instruction">Ultimate Particle System (High Performance)</div>
+    <div id="instruction">Dual Rings Particle System (80k Particles)</div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
         const scene = new THREE.Scene();
-        // Sương mù đen sâu thẳm
-        scene.fog = new THREE.FogExp2(0x000000, 0.002);
+        scene.fog = new THREE.FogExp2(0x000000, 0.0015); // Sương mù nhẹ hơn chút để nhìn rõ vành ngoài
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 45;
+        camera.position.z = 55; // Kéo xa camera ra một chút để thấy hết vành to
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio); // Tận dụng tối đa độ nét màn hình
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- CẤU HÌNH HỆ THỐNG HẠT ---
+        // --- CẤU HÌNH SỐ LƯỢNG HẠT ---
         const particlesGeometry = new THREE.BufferGeometry();
-        // MÁY KHỎE: Đẩy lên 80.000 hạt
         const particlesCount = 80000; 
 
         const posArray = new Float32Array(particlesCount * 3);
         const originalPosArray = new Float32Array(particlesCount * 3);
-        const colorsArray = new Float32Array(particlesCount * 3); // Mảng chứa màu sắc
+        const colorsArray = new Float32Array(particlesCount * 3); 
         const randomArray = new Float32Array(particlesCount); 
 
-        const colorPlanet = new THREE.Color(0xffaa00); // Màu Cam cho hành tinh
-        const colorRing = new THREE.Color(0xffffff);   // Màu Trắng cho vành đai
+        const colorPlanet = new THREE.Color(0xffaa00); // Cam (Hành tinh)
+        const colorRing = new THREE.Color(0xffffff);   // Trắng (Vành đai)
 
         for(let i = 0; i < particlesCount; i++) {
             const i3 = i * 3;
             
-            // Tỷ lệ: 60% hạt làm Hành tinh, 40% hạt làm Vành đai
-            const isRing = Math.random() > 0.6; 
+            // Chia tỷ lệ hạt:
+            // 0 - 0.45: Hành tinh (45%)
+            // 0.45 - 0.70: Vành nhỏ (25%)
+            // 0.70 - 1.0: Vành to (30%)
+            const type = Math.random(); 
 
             let x, y, z;
             let r, theta, phi;
 
-            if (!isRing) {
-                // --- TẠO HÀNH TINH (MÀU CAM) ---
-                r = 16 * Math.cbrt(Math.random()); // Bán kính khối cầu
+            if (type < 0.45) {
+                // === 1. HÀNH TINH (PLANET) ===
+                r = 15 * Math.cbrt(Math.random()); 
                 theta = Math.random() * 2 * Math.PI;
                 phi = Math.acos(2 * Math.random() - 1);
 
@@ -70,30 +71,38 @@
                 y = r * Math.sin(phi) * Math.sin(theta);
                 z = r * Math.cos(phi);
 
-                // Gán màu CAM
+                // Màu CAM
                 colorsArray[i3] = colorPlanet.r;
                 colorsArray[i3+1] = colorPlanet.g;
                 colorsArray[i3+2] = colorPlanet.b;
 
             } else {
-                // --- TẠO VÀNH ĐAI (MÀU TRẮNG) ---
-                // Vành đai rộng từ bán kính 22 đến 35
-                const ringR = 22 + Math.random() * 13; 
-                const ringTheta = Math.random() * 2 * Math.PI;
+                // === VÀNH ĐAI (RINGS) ===
+                let ringR;
                 
+                if (type < 0.70) {
+                    // === 2. VÀNH ĐAI TRONG (INNER RING) ===
+                    // Bán kính từ 19 đến 27
+                    ringR = 19 + Math.random() * 8;
+                } else {
+                    // === 3. VÀNH ĐAI NGOÀI (OUTER RING) ===
+                    // Bán kính từ 32 đến 48 (Tạo khoảng hở từ 27->32)
+                    ringR = 32 + Math.random() * 16;
+                }
+
+                const ringTheta = Math.random() * 2 * Math.PI;
                 x = ringR * Math.cos(ringTheta);
                 z = ringR * Math.sin(ringTheta);
-                // Độ dày vành đai mỏng
-                y = (Math.random() - 0.5) * 0.8; 
+                y = (Math.random() - 0.5) * 0.6; // Độ dày mỏng
 
-                // Nghiêng vành đai một chút cho đẹp
-                const tilt = 0.4; // Góc nghiêng
+                // Nghiêng vành đai (Tilt)
+                const tilt = 0.4; 
                 const yNew = y * Math.cos(tilt) - z * Math.sin(tilt);
                 const zNew = y * Math.sin(tilt) + z * Math.cos(tilt);
                 y = yNew;
                 z = zNew;
 
-                // Gán màu TRẮNG
+                // Màu TRẮNG
                 colorsArray[i3] = colorRing.r;
                 colorsArray[i3+1] = colorRing.g;
                 colorsArray[i3+2] = colorRing.b;
@@ -111,12 +120,11 @@
         }
 
         particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3)); // Kích hoạt màu sắc từng hạt
+        particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3));
 
-        // Material đặc biệt để nhận màu (vertexColors: true)
         const material = new THREE.PointsMaterial({
-            size: 0.15, // Hạt nhỏ mịn
-            vertexColors: true, // Quan trọng: Cho phép mỗi hạt có màu riêng
+            size: 0.15,
+            vertexColors: true,
             transparent: true,
             opacity: 0.9,
             blending: THREE.AdditiveBlending,
@@ -138,7 +146,6 @@
             mouseX = (event.clientX - windowHalfX);
             mouseY = (event.clientY - windowHalfY);
         });
-
         document.addEventListener('touchmove', (event) => {
             if(event.touches.length > 0) {
                 mouseX = (event.touches[0].clientX - windowHalfX);
@@ -152,13 +159,13 @@
             requestAnimationFrame(animate);
             const elapsedTime = clock.getElapsedTime();
 
-            // Xoay nhẹ
             particlesMesh.rotation.y = elapsedTime * 0.08;
 
             const positions = particlesGeometry.attributes.position.array;
             
-            targetX = mouseX * 0.04; 
-            targetY = -mouseY * 0.04;
+            // Chỉnh độ nhạy chuột
+            targetX = mouseX * 0.05; 
+            targetY = -mouseY * 0.05;
 
             for(let i = 0; i < particlesCount; i++) {
                 const i3 = i * 3;
@@ -170,29 +177,28 @@
                 const dy = targetY - py;
                 const dist = Math.sqrt(dx*dx + dy*dy);
 
-                // Phạm vi tương tác
-                const interactionRadius = 18;
+                // Tăng bán kính tương tác lên để quét được cả vành ngoài
+                const interactionRadius = 25; 
 
                 if (dist < interactionRadius) {
                     const force = (interactionRadius - dist) / interactionRadius;
                     const angle = Math.atan2(dy, dx);
                     const noise = randomArray[i]; 
 
-                    // Lực đẩy mạnh mẽ
-                    const push = 35 * force * (1 + noise);
+                    // Lực đẩy
+                    const push = 40 * force * (1 + noise);
 
-                    positions[i3] -= Math.cos(angle) * 0.06 * push;
-                    positions[i3+1] -= Math.sin(angle) * 0.06 * push;
-                    positions[i3+2] += force * 8 * (Math.random() - 0.5); // Đẩy tung theo chiều sâu Z
+                    positions[i3] -= Math.cos(angle) * 0.08 * push;
+                    positions[i3+1] -= Math.sin(angle) * 0.08 * push;
+                    positions[i3+2] += force * 10 * (Math.random() - 0.5); 
                 } else {
-                    // Hồi phục chậm rãi
                     const originX = originalPosArray[i3];
                     const originY = originalPosArray[i3+1];
                     const originZ = originalPosArray[i3+2];
 
-                    positions[i3] += (originX - positions[i3]) * 0.02;
-                    positions[i3+1] += (originY - positions[i3+1]) * 0.02;
-                    positions[i3+2] += (originZ - positions[i3+2]) * 0.02;
+                    positions[i3] += (originX - positions[i3]) * 0.025;
+                    positions[i3+1] += (originY - positions[i3+1]) * 0.025;
+                    positions[i3+2] += (originZ - positions[i3+2]) * 0.025;
                 }
             }
             
